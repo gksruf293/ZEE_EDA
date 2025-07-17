@@ -12,7 +12,7 @@ st.title("🌍 WorldStrat 위성 이미지 EDA 대시보드")
 
 # 데이터 불러오기
 st.sidebar.header("📁 데이터 로드")
-metadata_path = st.sidebar.text_input("metadata.csv 경로", "dataset_download/metadata.csv")
+metadata_path = st.sidebar.text_input("metadata.csv 경로", "WorldStrat-EDA/dataset_download/metadata.csv")
 split_path = st.sidebar.text_input("데이터 분할 CSV 경로 (선택)", "dataset_download/stratified_train_val_test_split.csv")
 
 @st.cache_data
