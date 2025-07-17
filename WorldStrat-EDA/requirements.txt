@@ -1,7 +1,5 @@
 streamlit
 pandas
-folium
-streamlit-folium
-Pillow
-matplotlib
-seaborn
+pydeck
+pillow
+kaggle
