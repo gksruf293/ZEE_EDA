@@ -1,59 +1,63 @@
+
 import streamlit as st
 import pandas as pd
 import pydeck as pdk
+from PIL import Image
+from pathlib import Path
+import kagglehub
 
+# 📥 KaggleHub 데이터 다운로드
+DATA_PATH = kagglehub.dataset_download("jucor1/worldstrat")
+HR_IMAGE_BASE = Path(DATA_PATH) / "hr_dataset" / "12bit"
+METADATA_PATH = Path(DATA_PATH) / "metadata.csv"
+
+# 📄 메타데이터 불러오기
+df = pd.read_csv(METADATA_PATH)
+df = df.dropna(subset=["lat", "lon"])
+
+# ☁️ 클라우드 커버 필터
 st.set_page_config(layout="wide")
-st.title("🌍 WorldStrat 초고속 지도 EDA 대시보드 (pydeck 기반)")
+st.title("🗺️ WorldStrat 시각화 및 이미지 탐색기")
+cloud_max = st.slider("☁️ 최대 클라우드 커버 (%)", 0, 100, 20)
+filtered_df = df[df["cloud_cover"] <= cloud_max]
 
-# 데이터 불러오기
-@st.cache_data
-def load_data(path):
-    return pd.read_csv(path)
+# 🌍 지도 시각화
+st.pydeck_chart(pdk.Deck(
+    map_style="mapbox://styles/mapbox/satellite-streets-v11",
+    initial_view_state=pdk.ViewState(
+        latitude=filtered_df["lat"].mean(),
+        longitude=filtered_df["lon"].mean(),
+        zoom=3.5,
+    ),
+    layers=[
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=filtered_df,
+            get_position="[lon, lat]",
+            get_radius=30000,
+            get_color=[255, 140, 0],
+            pickable=True,
+        )
+    ]
+))
 
-metadata_path = st.sidebar.text_input("📁 metadata.csv 경로", "WorldStrat-EDA/dataset_download/metadata.csv")
-try:
-    df = load_data(metadata_path)
-    st.success("✅ metadata.csv 로드 완료")
-except Exception as e:
-    st.error(f"❌ 불러오기 실패: {e}")
-    st.stop()
+# 🔍 tile_id 선택
+tile_id = st.selectbox("📌 tile_id 선택", filtered_df["Unnamed: 0"].unique())
+tile_dir = HR_IMAGE_BASE / tile_id
 
-# 위도/경도 컬럼 선택
-lat_col = st.sidebar.selectbox("위도 컬럼 선택", options=df.columns, index=df.columns.get_loc("lat"))
-lon_col = st.sidebar.selectbox("경도 컬럼 선택", options=df.columns, index=df.columns.get_loc("lon"))
-
-# 선택적 필터링
-st.sidebar.markdown("### ☁️ 클라우드 커버 필터")
-if "cloud_cover" in df.columns:
-    cloud_max = st.sidebar.slider("최대 클라우드 커버 (%)", float(df["cloud_cover"].min()), float(df["cloud_cover"].max()), float(df["cloud_cover"].max()))
-    df = df[df["cloud_cover"] <= cloud_max]
-
-# pydeck 지도 시각화
-st.header("🗺️ 고속 시각화 - 위성 이미지 위치 (pydeck 기반)")
-if lat_col and lon_col and not df.empty:
-    st.pydeck_chart(pdk.Deck(
-        initial_view_state=pdk.ViewState(
-            latitude=df[lat_col].mean(),
-            longitude=df[lon_col].mean(),
-            zoom=2,
-            pitch=0,
-        ),
-        tooltip={"text": "위치: [{lat}, {lon}]"},
-        layers=[
-            pdk.Layer(
-                "ScatterplotLayer",
-                data=df,
-                get_position=f"[{lon_col}, {lat_col}]",
-                get_color='[200, 30, 0, 160]',
-                get_radius=5000,
-                pickable=True,
-            ),
-        ],
-    ))
+if tile_dir.exists():
+    st.markdown(f"**디렉토리:** `{tile_dir}`")
+    files = list(tile_dir.glob(f"{tile_id}_*"))
+    if files:
+        cols = st.columns(2)
+        for i, path in enumerate(files):
+            if path.suffix.lower() in [".png", ".jpg", ".jpeg", ".tif", ".tiff"]:
+                try:
+                    with cols[i % 2]:
+                        st.image(Image.open(path), caption=path.name)
+                except Exception as e:
+                    st.warning(f"⚠️ {path.name} 로딩 실패: {e}")
+    else:
+        st.info("ℹ️ 해당 타일에 파일이 없습니다.")
 else:
-    st.warning("위도/경도 컬럼 또는 데이터가 유효하지 않습니다.")
-
-# 선택적: 통계 정보
-if "cloud_cover" in df.columns:
-    st.header("📊 클라우드 커버 요약 통계")
-    st.write(df["cloud_cover"].describe())
+    st.error("❌ 해당 tile_id의 디렉토리를 찾을 수 없습니다.")
