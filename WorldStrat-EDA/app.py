@@ -1,15 +1,11 @@
 import streamlit as st
 import pandas as pd
-import folium
-from folium.plugins import MarkerCluster
-from streamlit_folium import st_folium
-import matplotlib.pyplot as plt
-import seaborn as sns
+import pydeck as pdk
 
 st.set_page_config(layout="wide")
-st.title("🌍 WorldStrat EDA - 풍부한 메타데이터 탐색 대시보드")
+st.title("🌍 WorldStrat 초고속 지도 EDA 대시보드 (pydeck 기반)")
 
-# 데이터 로드
+# 데이터 불러오기
 @st.cache_data
 def load_data(path):
     return pd.read_csv(path)
@@ -22,58 +18,42 @@ except Exception as e:
     st.error(f"❌ 불러오기 실패: {e}")
     st.stop()
 
-# 기본 정보
-st.header("🔎 데이터 개요")
-st.dataframe(df.head())
-st.write(df.describe(include="all"))
-
-# 위치 시각화
-st.header("🗺️ 이미지 위치 시각화")
+# 위도/경도 컬럼 선택
 lat_col = st.sidebar.selectbox("위도 컬럼 선택", options=df.columns, index=df.columns.get_loc("lat"))
 lon_col = st.sidebar.selectbox("경도 컬럼 선택", options=df.columns, index=df.columns.get_loc("lon"))
 
-if lat_col and lon_col:
-    m = folium.Map(location=[df[lat_col].mean(), df[lon_col].mean()], zoom_start=2)
-    cluster = MarkerCluster().add_to(m)
-    for _, row in df.iterrows():
-        popup = f"POI: {row['Unnamed: 0']}<br>Area: {row['area']} km²"
-        folium.Marker([row[lat_col], row[lon_col]], popup=popup).add_to(cluster)
-    st_folium(m, width=1000, height=500)
+# 선택적 필터링
+st.sidebar.markdown("### ☁️ 클라우드 커버 필터")
+if "cloud_cover" in df.columns:
+    cloud_max = st.sidebar.slider("최대 클라우드 커버 (%)", float(df["cloud_cover"].min()), float(df["cloud_cover"].max()), float(df["cloud_cover"].max()))
+    df = df[df["cloud_cover"] <= cloud_max]
 
-# 날짜 정보 분석
-st.header("📅 이미지 날짜 분포")
-df["lowres_date"] = pd.to_datetime(df["lowres_date"], errors='coerce')
-df["highres_date"] = pd.to_datetime(df["highres_date"], errors='coerce')
-fig, ax = plt.subplots(figsize=(10, 4))
-df["lowres_date"].dt.year.value_counts().sort_index().plot(kind='bar', ax=ax, color='skyblue', label='Low-Res')
-df["highres_date"].dt.year.value_counts().sort_index().plot(kind='bar', ax=ax, color='orange', alpha=0.7, label='High-Res')
-plt.legend()
-st.pyplot(fig)
+# pydeck 지도 시각화
+st.header("🗺️ 고속 시각화 - 위성 이미지 위치 (pydeck 기반)")
+if lat_col and lon_col and not df.empty:
+    st.pydeck_chart(pdk.Deck(
+        initial_view_state=pdk.ViewState(
+            latitude=df[lat_col].mean(),
+            longitude=df[lon_col].mean(),
+            zoom=2,
+            pitch=0,
+        ),
+        tooltip={"text": "위치: [{lat}, {lon}]"},
+        layers=[
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=df,
+                get_position=f"[{lon_col}, {lat_col}]",
+                get_color='[200, 30, 0, 160]',
+                get_radius=5000,
+                pickable=True,
+            ),
+        ],
+    ))
+else:
+    st.warning("위도/경도 컬럼 또는 데이터가 유효하지 않습니다.")
 
-# 클라우드 커버 히스토그램
-st.header("☁️ 클라우드 커버 분포")
-fig2, ax2 = plt.subplots()
-sns.histplot(df["cloud_cover"].dropna(), bins=50, ax=ax2, kde=True)
-st.pyplot(fig2)
-
-# IPCC, LCCS, SMOD 클래스별 분포
-st.header("📊 토지 피복 및 정착지 유형 통계")
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.subheader("IPCC Class")
-    st.bar_chart(df["IPCC Class"].value_counts())
-
-with col2:
-    st.subheader("LCCS Class (상위 10)")
-    st.bar_chart(df["LCCS class"].value_counts().head(10))
-
-with col3:
-    st.subheader("SMOD Class")
-    st.bar_chart(df["SMOD Class"].value_counts())
-
-# delta 값 분석
-st.header("📉 해상도 차이 (Delta) 통계")
-fig3, ax3 = plt.subplots()
-sns.histplot(df["delta"], bins=50, kde=True, ax=ax3)
-st.pyplot(fig3)
+# 선택적: 통계 정보
+if "cloud_cover" in df.columns:
+    st.header("📊 클라우드 커버 요약 통계")
+    st.write(df["cloud_cover"].describe())
