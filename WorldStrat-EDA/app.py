@@ -14,7 +14,7 @@ st.title("🌍 WorldStrat EDA - 풍부한 메타데이터 탐색 대시보드")
 def load_data(path):
     return pd.read_csv(path)
 
-metadata_path = st.sidebar.text_input("📁 metadata.csv 경로", "dataset_download/metadata.csv")
+metadata_path = st.sidebar.text_input("📁 metadata.csv 경로", "WorldStrat-EDA/dataset_download/metadata.csv")
 try:
     df = load_data(metadata_path)
     st.success("✅ metadata.csv 로드 완료")
