@@ -7,7 +7,7 @@ from pathlib import Path
 # 데이터 경로 설정
 DATA_PATH = Path("worldstrat_data")
 HR_IMAGE_BASE = DATA_PATH / "hr_dataset" / "12bit"
-METADATA_PATH = DATA_PATH / "metadata.csv"
+METADATA_PATH = WorldStrat-EDA/dataset_download/metadata.csv
 
 # 메타데이터 로딩
 df = pd.read_csv(METADATA_PATH)
