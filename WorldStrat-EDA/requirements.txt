@@ -5,4 +5,3 @@ streamlit-folium
 Pillow
 matplotlib
 seaborn
-kagglehub
